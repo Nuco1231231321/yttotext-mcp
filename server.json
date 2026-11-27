@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.Nuco1231231321/yttotext-mcp",
+  "title": "YT to Text — YouTube Transcript Remote MCP Server",
+  "description": "Hosted stateless Remote MCP server for extracting YouTube transcripts, paginating long videos, and listing playlist videos in Claude Code, Claude Desktop, and Cursor.",
+  "version": "1.0.0",
+  "websiteUrl": "https://yttotext.com/youtube-transcript-mcp",
+  "repository": {
+    "url": "https://github.com/Nuco1231231321/yttotext-mcp",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://yttotext.com/api/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer token generated at https://yttotext.com/developers (format: Bearer ytt_live_...)",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

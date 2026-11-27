@@ -1,0 +1,411 @@
+{
+  "name": "Monitor YouTube channels for new uploads, summarize transcripts with AI & send to Slack + Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Automated YouTube Channel Monitor -> AI Brief -> Slack & Google Sheets\n\n### How it works\nTurn any public YouTube channel into an automated competitor or research intelligence feed without running polling scripts or maintaining proxies.\n\n1. **Receive & verify webhook:** Catches signed `transcript.ready` events from YT to Text Channel Monitor, validates the `X-YTToText-Signature` (`v1=<hex>`) HMAC-SHA256 signature and 5-minute replay window, and rejects invalid callers with `401`.\n2. **Prepare & summarize:** Cleans transcript text, computes word count and reading time, safely caps context at 24,000 characters, and generates a structured JSON research brief with OpenAI.\n3. **Deliver & archive:** Posts the formatted digest to Slack, logs the structured record to Google Sheets, and returns `200 OK` to acknowledge webhook delivery.\n\n### Setup steps\n- [ ] Create a Channel Watchlist and copy your `whsec_...` webhook secret at [yttotext.com/watchlists](https://yttotext.com/watchlists).\n- [ ] Set `YTTOTEXT_WEBHOOK_SECRET` in n8n Environment Variables (or replace the placeholder in **Verify HMAC-SHA256 Signature**).\n- [ ] Connect your **OpenAI**, **Slack**, and **Google Sheets** credentials and pick your target channel and spreadsheet.\n- [ ] Activate the workflow and copy the Production Webhook URL into your YT to Text watchlist.\n\n### Customization\n- Swap **Google Sheets** for Notion, Airtable, or Supabase Vector Store to build a searchable team knowledge base.\n- Adjust the summary prompt in **Summarize Transcript (OpenAI)** to extract pricing mentions, feature launches, or product quotes.\n\nDocs: [yttotext.com/youtube-channel-monitor](https://yttotext.com/youtube-channel-monitor)",
+        "height": 820,
+        "width": 560
+      },
+      "id": "sticky-overview",
+      "name": "Sticky Note — Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Receive & verify signed webhook\n\nAccepts `POST` events from YT to Text Watchlists, validates HMAC-SHA256 signature + 5-minute timestamp window, and returns `401` on tampered requests.",
+        "height": 460,
+        "width": 720,
+        "color": 7
+      },
+      "id": "sticky-sec-1",
+      "name": "Sticky Note — Verify Webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Prepare transcript & generate AI research brief\n\nNormalizes transcript text, calculates length metrics, caps token budget, and asks OpenAI for a structured summary, key takeaways, and notable quotes.",
+        "height": 460,
+        "width": 700,
+        "color": 7
+      },
+      "id": "sticky-sec-2",
+      "name": "Sticky Note — Summarize",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Publish digest & acknowledge delivery\n\nPosts the research brief to Slack, appends a searchable row to Google Sheets, and acknowledges the webhook with `200 OK`.",
+        "height": 460,
+        "width": 520,
+        "color": 7
+      },
+      "id": "sticky-sec-3",
+      "name": "Sticky Note — Deliver & Archive",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Required before activating\n1. Set your `YTTOTEXT_WEBHOOK_SECRET` (`whsec_...`) from [yttotext.com/watchlists](https://yttotext.com/watchlists) inside **Verify HMAC-SHA256 Signature**.\n2. Replace placeholder Slack channel ID and Google Sheet ID before turning the workflow **Active**.",
+        "height": 200,
+        "width": 720,
+        "color": 3
+      },
+      "id": "sticky-security-note",
+      "name": "Sticky Note — Setup Warning",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "yttotext-channel-monitor",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "node-webhook-trigger",
+      "name": "YT to Text Watchlist Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        96,
+        420
+      ],
+      "webhookId": "yttotext-channel-monitor"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst lowerHeaders = Object.fromEntries(\n  Object.entries(headers).map(([k, v]) => [k.toLowerCase(), String(v ?? '')])\n);\n\nconst secret = $env.YTTOTEXT_WEBHOOK_SECRET || 'whsec_REPLACE_WITH_YOUR_SECRET';\nconst timestamp = lowerHeaders['x-yttotext-timestamp'] || '';\nconst signature = lowerHeaders['x-yttotext-signature'] || '';\nconst eventId = lowerHeaders['x-yttotext-event-id'] || '';\n\nconst rawBody = typeof item.json.rawBody === 'string'\n  ? item.json.rawBody\n  : JSON.stringify(item.json.body ?? item.json);\n\nconst ageSeconds = Math.abs(Date.now() / 1000 - Number(timestamp));\nconst freshTimestamp = /^\\d+$/.test(timestamp) && ageSeconds <= 300;\n\nconst expected = 'v1=' + crypto\n  .createHmac('sha256', secret)\n  .update(`${timestamp}.${rawBody}`)\n  .digest('hex');\n\nconst expectedBuf = Buffer.from(expected, 'utf8');\nconst receivedBuf = Buffer.from(signature, 'utf8');\nconst validSignature = freshTimestamp\n  && expectedBuf.length === receivedBuf.length\n  && crypto.timingSafeEqual(expectedBuf, receivedBuf);\n\nconst payload = item.json.body && typeof item.json.body === 'object'\n  ? item.json.body\n  : JSON.parse(rawBody || '{}');\n\nreturn [{ json: { validSignature, eventId, timestamp, payload } }];"
+      },
+      "id": "node-verify-hmac",
+      "name": "Verify HMAC-SHA256 Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-sig-ok",
+              "leftValue": "={{ $json.validSignature }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-valid",
+      "name": "Valid Signature?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'INVALID_WEBHOOK_SIGNATURE' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "node-respond-401",
+      "name": "Respond 401 Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        590
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { eventId, payload } = $input.first().json;\nconst video = payload.video || payload;\nconst transcriptObj = payload.transcript || {};\n\nconst videoId = video.videoId || video.id || '';\nconst videoTitle = video.title || transcriptObj.title || 'Untitled YouTube Video';\nconst channelTitle = payload.channel?.title || payload.watchlistName || 'Monitored Channel';\nconst videoUrl = video.url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '');\nconst rawText = (transcriptObj.text || payload.text || '').replace(/\\s+/g, ' ').trim();\n\nconst wordCount = rawText ? rawText.split(' ').length : 0;\nconst readMinutes = Math.max(1, Math.round(wordCount / 220));\nconst maxChars = 24000;\nconst truncated = rawText.length > maxChars;\nconst transcriptForLlm = truncated ? rawText.slice(0, maxChars) + '\\n[Truncated for summary context]' : rawText;\n\nreturn [{\n  json: {\n    eventId,\n    receivedAt: new Date().toISOString(),\n    channelTitle,\n    videoId,\n    videoTitle,\n    videoUrl,\n    language: transcriptObj.language || payload.language || 'en',\n    wordCount,\n    readMinutes,\n    truncated,\n    transcriptForLlm\n  }\n}];"
+      },
+      "id": "node-prepare-transcript",
+      "name": "Clean & Cap Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        856,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a concise research analyst. Return ONLY valid JSON with keys: oneLineSummary (string), keyTakeaways (array of 3-5 concise bullets), notableQuotes (array of 1-2 short verbatim quotes), actionItems (array of 1-3 follow-up actions)."
+            },
+            {
+              "content": "=Channel: {{ $json.channelTitle }}\nVideo Title: {{ $json.videoTitle }}\nURL: {{ $json.videoUrl }}\n\nTranscript:\n{{ $json.transcriptForLlm }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "id": "node-openai-brief",
+      "name": "Summarize Transcript (OpenAI)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1080,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Clean & Cap Transcript').first().json;\nconst aiItem = $input.first().json;\nconst content = aiItem.message?.content ?? aiItem.text ?? aiItem;\nlet brief = {};\ntry {\n  brief = typeof content === 'string' ? JSON.parse(content) : content;\n} catch {\n  brief = { oneLineSummary: String(content || ''), keyTakeaways: [], notableQuotes: [], actionItems: [] };\n}\n\nconst takeaways = Array.isArray(brief.keyTakeaways) ? brief.keyTakeaways : [];\nconst quotes = Array.isArray(brief.notableQuotes) ? brief.notableQuotes : [];\nconst actions = Array.isArray(brief.actionItems) ? brief.actionItems : [];\n\nconst slackMessage = [\n  `*New Video Brief — ${meta.channelTitle}*`,\n  `<${meta.videoUrl}|${meta.videoTitle}> (${meta.wordCount} words · ~${meta.readMinutes} min read)`,\n  '',\n  `*Summary:* ${brief.oneLineSummary || 'N/A'}`,\n  takeaways.length ? '\\n*Key takeaways:*\\n' + takeaways.map(t => `• ${t}`).join('\\n') : '',\n  quotes.length ? '\\n*Notable quote:*\\n> ' + quotes[0] : '',\n  actions.length ? '\\n*Suggested next step:*\\n' + actions.map(a => `- ${a}`).join('\\n') : ''\n].filter(Boolean).join('\\n');\n\nreturn [{\n  json: {\n    ...meta,\n    oneLineSummary: brief.oneLineSummary || '',\n    keyTakeawaysText: takeaways.join(' | '),\n    actionItemsText: actions.join(' | '),\n    slackMessage\n  }\n}];"
+      },
+      "id": "node-format-brief",
+      "name": "Format Slack & Sheet Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0123456789",
+          "mode": "id"
+        },
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "node-slack-send",
+      "name": "Post Brief to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Research Feed"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.receivedAt }}",
+            "Channel": "={{ $json.channelTitle }}",
+            "Title": "={{ $json.videoTitle }}",
+            "URL": "={{ $json.videoUrl }}",
+            "Words": "={{ $json.wordCount }}",
+            "Summary": "={{ $json.oneLineSummary }}",
+            "Takeaways": "={{ $json.keyTakeawaysText }}",
+            "Actions": "={{ $json.actionItemsText }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-sheets-append",
+      "name": "Archive Brief to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, eventId: $('Format Slack & Sheet Brief').first().json.eventId }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-200",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "YT to Text Watchlist Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC-SHA256 Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC-SHA256 Signature": {
+      "main": [
+        [
+          {
+            "node": "Valid Signature?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Signature?": {
+      "main": [
+        [
+          {
+            "node": "Clean & Cap Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean & Cap Transcript": {
+      "main": [
+        [
+          {
+            "node": "Summarize Transcript (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Transcript (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Format Slack & Sheet Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Slack & Sheet Brief": {
+      "main": [
+        [
+          {
+            "node": "Post Brief to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive Brief to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Brief to Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YouTube"
+    },
+    {
+      "name": "AI"
+    },
+    {
+      "name": "Slack"
+    },
+    {
+      "name": "Webhooks"
+    },
+    {
+      "name": "Research"
+    }
+  ]
+}

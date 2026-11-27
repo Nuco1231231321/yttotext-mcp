@@ -1,0 +1,343 @@
+{
+  "name": "Extract YouTube video transcripts with YT to Text API",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Extract YouTube Transcripts via YT to Text API\n\n### How it works\nFetch clean, timestamped YouTube transcripts through the hosted YT to Text REST API without cloud IP blocks or proxy maintenance.\n\n1. **Configure & submit:** Sets your video ID, language, and API key, then queues an idempotent job (`POST /api/v1/transcripts`).\n2. **Poll status:** Waits 5 seconds and checks `statusUrl` until `status` is `completed`.\n3. **Split output:** Splits `results` into one item per video (`videoId`, `title`, `text`, and `segments`) ready for OpenAI, Claude, or Notion.\n\n### Setup steps\n- [ ] Generate a `ytt_live_...` token at [yttotext.com/developers](https://yttotext.com/developers).\n- [ ] Paste your `apiKey`, `videoId`, and `language` into **Set Video & API Key**.\n- [ ] Click **Test workflow** to inspect the returned transcript items.\n\n### Customization\n- **Batch mode:** Add up to 50 video IDs in the `ids` array of **Create Transcript Request**.\n- **Automate:** Swap the manual trigger for a Webhook, RSS, or Schedule node.\n\nDocs: [yttotext.com/youtube-transcript-api](https://yttotext.com/youtube-transcript-api)",
+        "height": 800,
+        "width": 560
+      },
+      "id": "sticky-main-overview",
+      "name": "Sticky Note — Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Configure input & submit job\n\nSets your YouTube video ID, language, and API key, then queues an idempotent transcript extraction request.",
+        "height": 304,
+        "width": 640,
+        "color": 7
+      },
+      "id": "sticky-section-submit",
+      "name": "Sticky Note — Section 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        144,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Poll until completed\n\nWaits 5 seconds between checks and loops until the hosted API finishes extracting the transcript.",
+        "height": 304,
+        "width": 640,
+        "color": 7
+      },
+      "id": "sticky-section-poll",
+      "name": "Sticky Note — Section 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        816,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Split transcript output\n\nSplits the results array into one item per video with clean text and timestamped segments.",
+        "height": 304,
+        "width": 320,
+        "color": 7
+      },
+      "id": "sticky-section-output",
+      "name": "Sticky Note — Section 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Required: Replace placeholder API key before running\nOpen **Set Video & API Key** and replace `ytt_live_REPLACE_WITH_YOUR_API_KEY` with your token from [yttotext.com/developers](https://yttotext.com/developers). Otherwise the API returns `401 Unauthorized`.",
+        "height": 192,
+        "width": 640,
+        "color": 3
+      },
+      "id": "sticky-warning-api-key",
+      "name": "Sticky Note — API Key Warning",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        144,
+        672
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        192,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "video-id-field",
+              "name": "videoId",
+              "value": "jNQXAC9IVRw",
+              "type": "string"
+            },
+            {
+              "id": "language-field",
+              "name": "language",
+              "value": "en",
+              "type": "string"
+            },
+            {
+              "id": "api-key-field",
+              "name": "apiKey",
+              "value": "ytt_live_REPLACE_WITH_YOUR_API_KEY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-inputs",
+      "name": "Set Video & API Key",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://yttotext.com/api/v1/transcripts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.apiKey }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-{{ $execution.id }}-{{ $json.videoId }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": [\"{{ $json.videoId }}\"],\n  \"language\": \"{{ $json.language }}\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-create-job",
+      "name": "Create Transcript Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-poll",
+      "name": "Wait 5s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://yttotext.com{{ $('Create Transcript Request').item.json.statusUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Set Video & API Key').item.json.apiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-poll-status",
+      "name": "Poll Transcript Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1088,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-still-running",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-completed",
+      "name": "Is Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1312,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "options": {}
+      },
+      "id": "split-results",
+      "name": "Split Transcript Results",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set Video & API Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video & API Key": {
+      "main": [
+        [
+          {
+            "node": "Create Transcript Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Transcript Request": {
+      "main": [
+        [
+          {
+            "node": "Wait 5s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5s": {
+      "main": [
+        [
+          {
+            "node": "Poll Transcript Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Transcript Status": {
+      "main": [
+        [
+          {
+            "node": "Is Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Completed?": {
+      "main": [
+        [
+          {
+            "node": "Split Transcript Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 5s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YouTube"
+    },
+    {
+      "name": "Transcript"
+    },
+    {
+      "name": "AI"
+    }
+  ]
+}
