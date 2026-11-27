@@ -1,5 +1,7 @@
 # YT to Text — Remote MCP Server, REST API & n8n Workflows
 
+[![YT to Text MCP connector](https://glama.ai/mcp/connectors/com.yttotext/yt-to-text/badges/score.svg)](https://glama.ai/mcp/connectors/com.yttotext/yt-to-text)
+
 Official integration repository for **[YT to Text](https://yttotext.com)** — a hosted remote [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server, batch REST API, and signed webhook channel monitor for YouTube transcripts.
 
 Connect **Claude Code**, **Claude Desktop**, **Cursor**, **Windsurf**, and **n8n** directly to YouTube video, Shorts, and playlist transcripts without installing local Python/Node packages, maintaining `yt-dlp` binaries, or managing residential proxies.
