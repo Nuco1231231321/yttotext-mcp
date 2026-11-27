@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "yt-to-text": {
+      "url": "https://yttotext.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ytt_live_YOUR_API_KEY"
+      }
+    }
+  }
+}
